@@ -16,7 +16,11 @@
 
 package io.cdap.plugin;
 
-import io.cdap.cdap.etl.mock.common.MockPipelineConfigurer;
+import io.cdap.cdap.etl.api.validation.CauseAttributes;
+import io.cdap.cdap.etl.api.validation.ValidationException;
+import io.cdap.cdap.etl.api.validation.ValidationFailure;
+import io.cdap.cdap.etl.mock.action.MockCustomActionContext;
+import io.cdap.cdap.etl.mock.common.MockCustomPipelineConfigurer;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -55,9 +59,10 @@ public class ToUTF8ConfigTest {
     ToUTF8Action.ToUTF8Config config = new ToUTF8Action.ToUTF8Config(iso88591File.getFile(),
                                                                      destFolder.getPath() + "/" + UTF_8_FILE_NAME,
                                                                      null, "ISO-8859-1", false);
-    MockPipelineConfigurer configurer = new MockPipelineConfigurer(null);
+    MockCustomPipelineConfigurer configurer = new MockCustomPipelineConfigurer(null);
     new ToUTF8Action(config).configurePipeline(configurer);
-    new ToUTF8Action(config).run(null);
+    MockCustomActionContext context = new MockCustomActionContext();
+    new ToUTF8Action(config).run(context);
     assertEquals(1, destFolder.listFiles(filter).length);
     assertEquals(UTF_8_FILE_NAME, destFolder.listFiles(filter)[0].getName());
   }
@@ -71,9 +76,10 @@ public class ToUTF8ConfigTest {
     ToUTF8Action.ToUTF8Config config = new ToUTF8Action.ToUTF8Config(new File(iso88591File.getFile()).getParent(),
                                                                      destFolder.getPath(),
                                                                      null, "ISO-8859-1", false);
-    MockPipelineConfigurer configurer = new MockPipelineConfigurer(null);
+    MockCustomPipelineConfigurer configurer = new MockCustomPipelineConfigurer(null);
     new ToUTF8Action(config).configurePipeline(configurer);
-    new ToUTF8Action(config).run(null);
+    MockCustomActionContext context = new MockCustomActionContext();
+    new ToUTF8Action(config).run(context);
     assertEquals(1, destFolder.listFiles(filter).length);
     assertEquals(UTF_8_FILE_NAME, destFolder.listFiles(filter)[0].getName());
   }
@@ -88,9 +94,10 @@ public class ToUTF8ConfigTest {
       new ToUTF8Action.ToUTF8Config(new File(iso88591File.getFile()).getParent() + "/*.dat",
                                     destFolder.getPath(),
                                     null, "ISO-8859-1", false);
-    MockPipelineConfigurer configurer = new MockPipelineConfigurer(null);
+    MockCustomPipelineConfigurer configurer = new MockCustomPipelineConfigurer(null);
     new ToUTF8Action(config).configurePipeline(configurer);
-    new ToUTF8Action(config).run(null);
+    MockCustomActionContext context = new MockCustomActionContext();
+    new ToUTF8Action(config).run(context);
     assertEquals(1, destFolder.listFiles(filter).length);
     assertEquals(UTF_8_FILE_NAME, destFolder.listFiles(filter)[0].getName());
   }
@@ -104,10 +111,84 @@ public class ToUTF8ConfigTest {
     ToUTF8Action.ToUTF8Config config = new ToUTF8Action.ToUTF8Config(new File(iso88591File.getFile()).getParent(),
                                                                      destFolder.getPath(),
                                                                      ".*\\.dat", "ISO-8859-1", false);
-    MockPipelineConfigurer configurer = new MockPipelineConfigurer(null);
+    MockCustomPipelineConfigurer configurer = new MockCustomPipelineConfigurer(null);
     new ToUTF8Action(config).configurePipeline(configurer);
-    new ToUTF8Action(config).run(null);
+    MockCustomActionContext context = new MockCustomActionContext();
+    new ToUTF8Action(config).run(context);
     assertEquals(1, destFolder.listFiles(filter).length);
     assertEquals(UTF_8_FILE_NAME, destFolder.listFiles(filter)[0].getName());
+  }
+
+  @Test
+  public void testValidationEmptySourcePath() {
+    ToUTF8Action.ToUTF8Config config = new ToUTF8Action.ToUTF8Config("", "",
+                                                                     ".*\\.dat", "ISO-8859-1", false);
+    MockCustomPipelineConfigurer configurer = new MockCustomPipelineConfigurer(null);
+    try {
+      new ToUTF8Action(config).configurePipeline(configurer);
+    } catch (ValidationException e) {
+      assertEquals(1, e.getFailures().size());
+      ValidationFailure validationFailure = e.getFailures().get(0);
+      assertEquals("Source file or folder is required.", validationFailure.getMessage());
+      assertEquals(1, validationFailure.getCauses().size());
+      ValidationFailure.Cause cause = validationFailure.getCauses().get(0);
+      assertEquals("sourceFilePath", cause.getAttribute(CauseAttributes.STAGE_CONFIG));
+      assertEquals("testStage", cause.getAttribute("stage"));
+    }
+  }
+
+  @Test
+  public void testValidationEmptyDestinationPath() {
+    ToUTF8Action.ToUTF8Config config = new ToUTF8Action.ToUTF8Config("_12_test", "",
+                                                                     ".*\\.dat", "ISO-8859-1", false);
+    MockCustomPipelineConfigurer configurer = new MockCustomPipelineConfigurer(null);
+    try {
+      new ToUTF8Action(config).configurePipeline(configurer);
+    } catch (ValidationException e) {
+      assertEquals(1, e.getFailures().size());
+      ValidationFailure validationFailure = e.getFailures().get(0);
+      assertEquals("Destination file or folder is required.", validationFailure.getMessage());
+      assertEquals(1, validationFailure.getCauses().size());
+      ValidationFailure.Cause cause = validationFailure.getCauses().get(0);
+      assertEquals("destFilePath", cause.getAttribute(CauseAttributes.STAGE_CONFIG));
+      assertEquals("testStage", cause.getAttribute("stage"));
+    }
+  }
+
+  @Test
+  public void testValidationFileRegularExpression() {
+    ToUTF8Action.ToUTF8Config config = new ToUTF8Action.ToUTF8Config("source_path", "dest_path",
+                                                                     "*\\.dat", "ISO-8859-1", false);
+    MockCustomPipelineConfigurer configurer = new MockCustomPipelineConfigurer(null);
+    try {
+      new ToUTF8Action(config).configurePipeline(configurer);
+    } catch (ValidationException e) {
+      assertEquals(1, e.getFailures().size());
+      ValidationFailure validationFailure = e.getFailures().get(0);
+      assertEquals("The regular expression pattern provided is not a valid regular expression.",
+                   validationFailure.getMessage());
+      assertEquals(1, validationFailure.getCauses().size());
+      ValidationFailure.Cause cause = validationFailure.getCauses().get(0);
+      assertEquals("fileRegex", cause.getAttribute(CauseAttributes.STAGE_CONFIG));
+      assertEquals("testStage", cause.getAttribute("stage"));
+    }
+  }
+
+  @Test
+  public void testValidationCharacterSet() {
+    ToUTF8Action.ToUTF8Config config = new ToUTF8Action.ToUTF8Config("source_path", "dest_path",
+                                                                     ".*\\.dat", "ISO-885-1", false);
+    MockCustomPipelineConfigurer configurer = new MockCustomPipelineConfigurer(null);
+    try {
+      new ToUTF8Action(config).configurePipeline(configurer);
+    } catch (ValidationException e) {
+      assertEquals(1, e.getFailures().size());
+      ValidationFailure validationFailure = e.getFailures().get(0);
+      assertEquals("ISO-885-1", validationFailure.getMessage());
+      assertEquals(1, validationFailure.getCauses().size());
+      ValidationFailure.Cause cause = validationFailure.getCauses().get(0);
+      assertEquals("charset", cause.getAttribute(CauseAttributes.STAGE_CONFIG));
+      assertEquals("testStage", cause.getAttribute("stage"));
+    }
   }
 }
